@@ -2,20 +2,43 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#include "md5.h"
+
+char* digestMD5(uint8_t hash[16]);
+static char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static int alphabet_length = strlen(allowed_characters);
 
 
 
-
-
-__global__ void mykernel(void) {
-}
 int main(void) {
-	mykernel <<<1, 1 >>> ();
-	printf("Hello World!\n");
+	char msg[32] = "Hello World!";
+	int len = strlen(msg);
+	int cudaStatus;
+	uint8_t result[16];
+	
+	cudaStatus = CudaMD5((uint8_t*)msg, len, result);
+	
+	if (cudaStatus != cudaSuccess){
+		printf("An error with CUDA occured!\n");
+	}
+	char* digest = digestMD5(result);
+	printf("Result: %s", digest);
+	free(digest);
 	return 0;
 }
 
-
+char* digestMD5(uint8_t hash[16]) {
+	char* digest;
+	digest = (char*)malloc(33);
+	for (int j = 0; j < 16; j++)
+		sprintf(&digest[2 * j], "%02X", hash[j]);
+	digest[32] = '\0';
+	return digest;
+}
 
 
 
