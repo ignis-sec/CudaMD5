@@ -115,12 +115,12 @@ __global__ void md5kernel(const uint8_t* initial_msg, size_t initial_len, uint8_
 }
 
 // Cuda Compute MD5
-cudaError_t CudaMD5(const uint8_t* initial_msg, size_t initial_len, uint8_t* digest)
+cudaError_t CudaMD5(const uint8_t* initial_msg, uint8_t* digest)
 {
 	uint8_t* dev_initial_msg = 0;
 	uint8_t* dev_digest = 0;
 	cudaError_t cudaStatus;
-
+	size_t initial_len = strlen((char*)initial_msg);
 	// Set device as 0
 	cudaStatus = cudaSetDevice(0);
 	if (cudaStatus != cudaSuccess) {
@@ -171,7 +171,6 @@ cudaError_t CudaMD5(const uint8_t* initial_msg, size_t initial_len, uint8_t* dig
 		fprintf(stderr, "cudaMemcpy failed at dev_r => cuda_r");
 		goto Error;
 	}
-
 	// Launch a kernel on the GPU with one thread for each element.
 	md5kernel <<<1, initial_len >>> (dev_initial_msg, initial_len, dev_digest, dev_k, dev_r);
 

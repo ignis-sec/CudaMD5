@@ -9,25 +9,30 @@
 #include "md5.h"
 
 char* digestMD5(uint8_t hash[16]);
-static char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-static int alphabet_length = strlen(allowed_characters);
-
+char* getNext();
+static const char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+static const int alphabet_length = strlen(allowed_characters);
+static const char salt[] = "Ignis";
+static const int saltlen = 5;
+static const int MAX_UNHASHED_LEN = 32;
 
 
 int main(void) {
-	char msg[32] = "Hello World!";
-	int len = strlen(msg);
+	char* msg;
 	int cudaStatus;
 	uint8_t result[16];
 	
-	cudaStatus = CudaMD5((uint8_t*)msg, len, result);
-	
-	if (cudaStatus != cudaSuccess){
-		printf("An error with CUDA occured!\n");
+	for (int i = 0; i < 10000000; i++) {
+		msg = getNext();
+		cudaStatus = CudaMD5((uint8_t*)msg, result);
+		if (cudaStatus != cudaSuccess) {
+			printf("An error with CUDA occured!\n");
+		}
+		char* digest = digestMD5(result);
+		printf("%32s : %32s\r", msg, digest);
+		free(digest);
 	}
-	char* digest = digestMD5(result);
-	printf("Result: %s", digest);
-	free(digest);
+
 	return 0;
 }
 
@@ -40,7 +45,29 @@ char* digestMD5(uint8_t hash[16]) {
 	return digest;
 }
 
-
+char* getNext() {
+	static int offset = 0;
+	int _offset;
+	char *extension;
+	char* result;
+	extension = (char*)malloc(MAX_UNHASHED_LEN - saltlen);
+	memcpy(extension, "\0", MAX_UNHASHED_LEN - saltlen);
+	result = (char*)malloc(MAX_UNHASHED_LEN);
+	_offset = ++offset;
+	for (int i = 0; i < 32; i++) {
+		int rem = _offset % alphabet_length;
+		int div = _offset / alphabet_length;
+		_offset = div;
+		//printf("rem: %d div:%d\n", rem, div);
+		extension[i] = allowed_characters[rem];
+		if (div == 0) {
+			break;
+		}
+	}
+	strcpy(result, salt);
+	strcat(result, extension);
+	return result;
+}
 
 
 
