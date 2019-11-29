@@ -1,6 +1,6 @@
 
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+#include <cuda.h>
+#include <device_launch_parameters.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,12 +11,12 @@
 #include <curand_kernel.h>
 #include <device_functions.h>
 
-#define BLOCKSIZE 16
+#define BLOCKSIZE 512
 __device__ void CudaMD5(unsigned char* data, int length, uint32_t* a1, uint32_t* b1, uint32_t* c1, uint32_t* d1);
 char* digestMD5(uint32_t hash[4]);
-__global__ void getNext(uint8_t* plain, uint32_t* hash);
+__global__ void getNext(uint32_t* iter, uint8_t* result, uint32_t* hash);
 __device__ static const char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-__device__ static const int alphabet_length = 63;
+__device__ static const int alphabet_length = 62;
 __device__ static const char salt[] = "Ignis";
 __device__ static const int saltlen = 5;
 __device__ static const int MAX_UNHASHED_LEN = 32;
@@ -24,24 +24,22 @@ __device__ static const int MAX_UNHASHED_LEN = 32;
 int main(void) {
 	char* msg;
 	int cudaStatus;
-	uint8_t* plain;
-	uint8_t* d_plain;
-	uint32_t* hash;
-	uint32_t* d_hash;
-
-	plain = (uint8_t*)malloc(32 * BLOCKSIZE );
-	cudaMalloc((void***)&d_plain, 32 * BLOCKSIZE);
-	hash = (uint32_t*)malloc(4*sizeof(uint32_t) * BLOCKSIZE);
-	cudaMalloc((void***)&d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE);
-
-
-	for (int i = 0; i < 10; i++) {
-		 getNext<<<64,1>>>(d_plain, d_hash);
+	uint8_t *plain;
+	uint8_t *d_plain;
+	uint32_t *hash;
+	uint32_t *d_hash;
+	plain = (uint8_t*)malloc(BLOCKSIZE * 32);
+	hash = (uint32_t*)malloc(BLOCKSIZE * 4 * sizeof(uint32_t));
+	cudaMalloc((void**)&d_plain, 32 * BLOCKSIZE);
+	cudaMalloc((void**)&d_hash, 4 * BLOCKSIZE * sizeof(uint32_t));
+	for (uint32_t i = 0; i <1 ; i++) {//78125
+		 getNext<<<512,1>>>(&i,d_plain, d_hash);
+		 cudaDeviceSynchronize();
 		 cudaMemcpy(plain, d_plain, 32 * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 for (int j = 0; j < BLOCKSIZE; j++) {
-			 char* digest = digestMD5(hash+j*sizeof(uint32_t)*4);
-			 printf("%s: %s\n", plain+j * sizeof(uint8_t)*32, digest);
+			 char* digest = digestMD5(&hash[4*j]);
+			 printf("%5d %16s: %32s\n",i*BLOCKSIZE, &plain[32*j], digest);
 		 }
 
 	}
@@ -66,14 +64,16 @@ char* digestMD5(uint32_t hash[4]) {
 }
 
 
-__global__ void getNext(uint8_t* result, uint32_t* hash) {
+__global__ void getNext(uint32_t* iter, uint8_t *result, uint32_t *hash) {
 	static int offset = 0;
 	int _offset;
+	_offset = blockIdx.x;
 	char* extension;
 	extension = (char*)malloc(MAX_UNHASHED_LEN - saltlen);
 	memcpy(extension, "\0", MAX_UNHASHED_LEN - saltlen);
 	int maxi = 0;
-	_offset = ++offset;
+	
+	
 	for (int i = 0; i < 32; i++) {
 		int rem = _offset % alphabet_length;
 		int div = _offset / alphabet_length;
@@ -90,10 +90,12 @@ __global__ void getNext(uint8_t* result, uint32_t* hash) {
 	hashin = (unsigned char* )malloc(saltlen + maxi);
 
 	uint32_t* a, * b, * c, * d;
-	memcpy(result, salt, saltlen);
-	memcpy(result + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
-	memcpy(hashin,result, saltlen+maxi+1);
-	CudaMD5(hashin,maxi+saltlen+1, &hash[0], &hash[1], &hash[2], &hash[3]);
+	memcpy(&result[blockIdx.x*32], salt, saltlen);
+	memcpy(&result[blockIdx.x*32] + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
+	memcpy(hashin, &result[blockIdx.x*32], 32);
+	CudaMD5(hashin,maxi+saltlen+1, &hash[blockIdx.x*4], &hash[blockIdx.x*4+1], &hash[blockIdx.x*4+2], &hash[blockIdx.x*4+3]);
+	free(extension);
+	free(hashin);
 }
 
 
