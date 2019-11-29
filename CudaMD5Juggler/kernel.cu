@@ -51,12 +51,12 @@ int main(void) {
 		 cudaMalloc((void**)&iter, sizeof(uint32_t));
 		 cudaMemcpy(iter,&i, sizeof(uint32_t),cudaMemcpyHostToDevice);
 		 getNext<<<BLOCKSIZE,THREADSIZE>>>(iter,d_plain, d_hash, d_solbuf, d_solhash);
-		 cudaMemcpy(plain, d_plain, 32 * THREADSIZE * BLOCKSIZE, cudaMemcpyDeviceToHost);
-		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t)* THREADSIZE * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 //cudaMemcpy(plain, d_plain, 32 * THREADSIZE * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 //cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t)* THREADSIZE * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(solbuf, d_solbuf, 32, cudaMemcpyDeviceToHost);
 		 //cudaMemcpy(solhash, d_solhash,32, cudaMemcpyDeviceToHost);
 		 for (int j = 0; j < THREADSIZE * BLOCKSIZE; j++) {
-			 char* digest = digestMD5(&hash[4*j]);
+			 //char* digest = digestMD5(&hash[4*j]);
 			 //char* digest2 = digestMD5(solhash);
 			 if (strlen((char*)solbuf) != 0) {
 				 printf("Juggle type found:%s                                                           \n\n", solbuf);
@@ -64,9 +64,10 @@ int main(void) {
 				 memset(solbuf, 0, 32);
 				 cudaMemset(d_solbuf, 0, 32);
 			 }
-			 //if ((i % 100)==0)
-			 printf("%10d %16s: %32s\r",i* THREADSIZE * BLOCKSIZE+j, &plain[32*j], digest);
-			 free(digest);
+			 if (!(j%4096))
+				 //printf("%10d %16s: %32s\r", i * THREADSIZE * BLOCKSIZE + j, &plain[32 * j], digest);
+				 printf("%10d\r", i * THREADSIZE * BLOCKSIZE + j);
+			 //free(digest);
 		 }
 		 cudaFree(iter);
 
