@@ -64,7 +64,7 @@ int main(void) {
 				 memset(solbuf, 0, 32);
 				 cudaMemset(d_solbuf, 0, 32);
 			 }
-			 if (!(j%4096))
+			 if (!(j%409600))
 				 //printf("%10d %16s: %32s\r", i * THREADSIZE * BLOCKSIZE + j, &plain[32 * j], digest);
 				 printf("%10d\r", i * THREADSIZE * BLOCKSIZE + j);
 			 //free(digest);

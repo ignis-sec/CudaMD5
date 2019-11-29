@@ -11,11 +11,11 @@
 
 __device__ static const char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 __device__ static const int alphabet_length = 62;
-__device__ static const char salt[] = "ignisET1Y";
-__device__ static const int saltlen = 9;
+__device__ static const char salt[] = "ignis";
+__device__ static const int saltlen = 5;
 __device__ static const int MAX_UNHASHED_LEN = 32;
 
-#define BLOCKSIZE 1024
+#define BLOCKSIZE 512
 #define THREADSIZE 512
 
 __device__ void CudaMD5(unsigned char* data, int length, uint32_t* a1, uint32_t* b1, uint32_t* c1, uint32_t* d1);

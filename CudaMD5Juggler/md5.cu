@@ -26,8 +26,8 @@
 
 __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf, uint32_t* solhash) {
 	uint32_t _offset;
-	uint32_t id = (blockIdx.x * blockDim.x + threadIdx.x); //id in current job
-	_offset = *iter * blockDim.x + id;
+	uint32_t id = (blockIdx.x * THREADSIZE + threadIdx.x); //id in current job
+	_offset = *iter * THREADSIZE * BLOCKSIZE + id;
 	char* extension;
 	extension = (char*)malloc(MAX_UNHASHED_LEN - saltlen);
 	memcpy(extension, "\0", MAX_UNHASHED_LEN - saltlen);
