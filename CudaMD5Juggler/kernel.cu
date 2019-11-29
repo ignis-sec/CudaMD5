@@ -11,7 +11,7 @@
 #include <curand_kernel.h>
 #include <device_functions.h>
 
-
+#define BLOCKSIZE 16
 __device__ void CudaMD5(unsigned char* data, int length, uint32_t* a1, uint32_t* b1, uint32_t* c1, uint32_t* d1);
 char* digestMD5(uint32_t hash[4]);
 __global__ void getNext(uint8_t* plain, uint32_t* hash);
@@ -29,18 +29,21 @@ int main(void) {
 	uint32_t* hash;
 	uint32_t* d_hash;
 
-	plain = (uint8_t*)malloc(16);
-	cudaMalloc((void***)&d_plain, 16);
-	hash = (uint32_t*)malloc(4*sizeof(uint32_t));
-	cudaMalloc((void***)&d_hash, 4 * sizeof(uint32_t));
+	plain = (uint8_t*)malloc(32 * BLOCKSIZE );
+	cudaMalloc((void***)&d_plain, 32 * BLOCKSIZE);
+	hash = (uint32_t*)malloc(4*sizeof(uint32_t) * BLOCKSIZE);
+	cudaMalloc((void***)&d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE);
 
 
 	for (int i = 0; i < 10; i++) {
 		 getNext<<<64,1>>>(d_plain, d_hash);
-		 cudaMemcpy(plain, d_plain, 16, cudaMemcpyDeviceToHost);
-		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-		 char* digest = digestMD5(hash);
-		 printf("%s: %s\n", plain, digest);
+		 cudaMemcpy(plain, d_plain, 32 * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 for (int j = 0; j < BLOCKSIZE; j++) {
+			 char* digest = digestMD5(hash+j*sizeof(uint32_t)*4);
+			 printf("%s: %s\n", plain+j * sizeof(uint8_t)*32, digest);
+		 }
+
 	}
 
 	return 0;
