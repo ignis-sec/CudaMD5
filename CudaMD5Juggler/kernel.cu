@@ -44,15 +44,24 @@ int main(void) {
 	for (int i = 0; i < 78125; i++) {//78125
 		 cudaMalloc((void**)&iter, sizeof(uint32_t));
 		 cudaMemcpy(iter,&i, sizeof(uint32_t),cudaMemcpyHostToDevice);
-		 getNext<<<512,1>>>(iter,d_plain, d_hash, d_solbuf, d_solhash);
+		 getNext<<<BLOCKSIZE,1>>>(iter,d_plain, d_hash, d_solbuf, d_solhash);
 		 cudaMemcpy(plain, d_plain, 32 * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(solbuf, d_solbuf, 32, cudaMemcpyDeviceToHost);
-		 cudaMemcpy(solhash, d_solhash, 4 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+		 cudaMemcpy(solhash, d_solhash,32, cudaMemcpyDeviceToHost);
 		 for (int j = 0; j < BLOCKSIZE; j++) {
 			 char* digest = digestMD5(&hash[4*j]);
 			 char* digest2 = digestMD5(solhash);
-			 printf("%5d %16s: %32s; solbuf:%s, solhash:%s\n",i*BLOCKSIZE, &plain[32*j], digest, solbuf, digest2);
+			 if (strlen((char*)solbuf) != 0) {
+				 printf("Juggle type found:%s                                                           \n\n", solbuf);
+				 solbuf[0] = 0;
+				 memset(solbuf, 0, 32);
+				 cudaMemset(d_solbuf, 0, 32);
+			 }
+			 printf("%5d %16s: %32s\r",i*BLOCKSIZE, &plain[32*j], digest);
+			 //for (int i = 0; i < 32; i++) {
+			//	 printf("%d ", solhash[i]);
+			 //}printf("\n");
 
 		 }
 		 cudaFree(iter);
@@ -112,24 +121,24 @@ __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* sol
 	int digestedCounter = 0;
 	int bMatchFlag = 1;
 	for (int i = 0; i < 4; i++) {
-		if (!bMatchFlag)break;
+		//if (!bMatchFlag)break;
 		tw = hash[blockIdx.x * 4 + i];
 		for (int j = 0; j < 4; j++) {
-			if (!bMatchFlag)break;
+			//if (!bMatchFlag)break;
 			for (int k = 0; k < 2; k++) {
-				tb = tw << 8 * j;
+				tb = tw >> 8 * j;
 				if (k == 0) {
-					tb = tb & 0xf0;
+					tb = (tb & 0xf0) / 16;
 				}
 				else {
-					tb = (tb & 0x0f)/8;
+					tb = (tb & 0x0f);
 				}
+
 				if (digestedCounter == 0 && tb!= 0) {
 					bMatchFlag = false;
 				}else if (digestedCounter == 1 && tb != 14) { //e
 					bMatchFlag = false;
-				}
-				else if (tb > 9) {
+				}else if (digestedCounter>2 && tb > 9) {
 					bMatchFlag = false;
 				}
 				digestedCounter++;
@@ -138,7 +147,7 @@ __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* sol
 	}
 	if (bMatchFlag) {
 		memcpy(solbuf, hashin, 32);
-		memcpy(solhash, &hash[blockIdx.x * 4], 4* sizeof(uint32_t));
+		//memcpy(solhash, &hash[blockIdx.x * 4], 4* sizeof(uint32_t));
 	}
 	free(extension);
 	free(hashin);
