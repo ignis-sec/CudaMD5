@@ -14,11 +14,11 @@
 #define BLOCKSIZE 512
 __device__ void CudaMD5(unsigned char* data, int length, uint32_t* a1, uint32_t* b1, uint32_t* c1, uint32_t* d1);
 char* digestMD5(uint32_t hash[4]);
-__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash);
+__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t *solbuf, uint32_t* solhash);
 __device__ static const char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 __device__ static const int alphabet_length = 62;
-__device__ static const char salt[] = "Ignis";
-__device__ static const int saltlen = 5;
+__device__ static const char salt[] = "ignisET1Y";
+__device__ static const int saltlen = 9;
 __device__ static const int MAX_UNHASHED_LEN = 32;
 
 int main(void) {
@@ -28,20 +28,32 @@ int main(void) {
 	uint8_t *d_plain;
 	uint32_t *hash;
 	uint32_t *d_hash;
+	uint8_t* solbuf;
+	uint8_t* d_solbuf;
+	uint32_t* solhash;
+	uint32_t* d_solhash;
 	int* iter;
 	plain = (uint8_t*)malloc(BLOCKSIZE * 32);
 	hash = (uint32_t*)malloc(BLOCKSIZE * 4 * sizeof(uint32_t));
+	solbuf = (uint8_t*)malloc(32);
+	solhash = (uint32_t*)malloc(4 * sizeof(uint32_t));
 	cudaMalloc((void**)&d_plain, 32 * BLOCKSIZE);
 	cudaMalloc((void**)&d_hash, 4 * BLOCKSIZE * sizeof(uint32_t));
+	cudaMalloc((void**)&d_solbuf, 32);
+	cudaMalloc((void**)&d_solhash, 4 * sizeof(uint32_t));
 	for (int i = 0; i < 78125; i++) {//78125
 		 cudaMalloc((void**)&iter, sizeof(uint32_t));
 		 cudaMemcpy(iter,&i, sizeof(uint32_t),cudaMemcpyHostToDevice);
-		 getNext<<<512,1>>>(iter,d_plain, d_hash);
+		 getNext<<<512,1>>>(iter,d_plain, d_hash, d_solbuf, d_solhash);
 		 cudaMemcpy(plain, d_plain, 32 * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 cudaMemcpy(solbuf, d_solbuf, 32, cudaMemcpyDeviceToHost);
+		 cudaMemcpy(solhash, d_solhash, 4 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
 		 for (int j = 0; j < BLOCKSIZE; j++) {
 			 char* digest = digestMD5(&hash[4*j]);
-			 printf("%5d %16s: %32s\r",i*BLOCKSIZE, &plain[32*j], digest);
+			 char* digest2 = digestMD5(solhash);
+			 printf("%5d %16s: %32s; solbuf:%s, solhash:%s\n",i*BLOCKSIZE, &plain[32*j], digest, solbuf, digest2);
+
 		 }
 		 cudaFree(iter);
 
@@ -67,7 +79,7 @@ char* digestMD5(uint32_t hash[4]) {
 }
 
 
-__global__ void getNext(int* iter, uint8_t *result, uint32_t *hash) {
+__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf, uint32_t* solhash) {
 	int _offset;
 	_offset = *iter*BLOCKSIZE + blockIdx.x;
 	char* extension;
@@ -95,6 +107,39 @@ __global__ void getNext(int* iter, uint8_t *result, uint32_t *hash) {
 	memcpy(&result[blockIdx.x*32] + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
 	memcpy(hashin, &result[blockIdx.x*32], 32);
 	CudaMD5(hashin,maxi+saltlen+1, &hash[blockIdx.x*4], &hash[blockIdx.x*4+1], &hash[blockIdx.x*4+2], &hash[blockIdx.x*4+3]);
+	uint8_t tb;
+	uint32_t tw;
+	int digestedCounter = 0;
+	int bMatchFlag = 1;
+	for (int i = 0; i < 4; i++) {
+		if (!bMatchFlag)break;
+		tw = hash[blockIdx.x * 4 + i];
+		for (int j = 0; j < 4; j++) {
+			if (!bMatchFlag)break;
+			for (int k = 0; k < 2; k++) {
+				tb = tw << 8 * j;
+				if (k == 0) {
+					tb = tb & 0xf0;
+				}
+				else {
+					tb = (tb & 0x0f)/8;
+				}
+				if (digestedCounter == 0 && tb!= 0) {
+					bMatchFlag = false;
+				}else if (digestedCounter == 1 && tb != 14) { //e
+					bMatchFlag = false;
+				}
+				else if (tb > 9) {
+					bMatchFlag = false;
+				}
+				digestedCounter++;
+			}
+		}
+	}
+	if (bMatchFlag) {
+		memcpy(solbuf, hashin, 32);
+		memcpy(solhash, &hash[blockIdx.x * 4], 4* sizeof(uint32_t));
+	}
 	free(extension);
 	free(hashin);
 }
