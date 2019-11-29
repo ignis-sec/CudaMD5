@@ -14,7 +14,7 @@
 #define BLOCKSIZE 512
 __device__ void CudaMD5(unsigned char* data, int length, uint32_t* a1, uint32_t* b1, uint32_t* c1, uint32_t* d1);
 char* digestMD5(uint32_t hash[4]);
-__global__ void getNext(uint32_t* iter, uint8_t* result, uint32_t* hash);
+__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash);
 __device__ static const char allowed_characters[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 __device__ static const int alphabet_length = 62;
 __device__ static const char salt[] = "Ignis";
@@ -28,19 +28,22 @@ int main(void) {
 	uint8_t *d_plain;
 	uint32_t *hash;
 	uint32_t *d_hash;
+	int* iter;
 	plain = (uint8_t*)malloc(BLOCKSIZE * 32);
 	hash = (uint32_t*)malloc(BLOCKSIZE * 4 * sizeof(uint32_t));
 	cudaMalloc((void**)&d_plain, 32 * BLOCKSIZE);
 	cudaMalloc((void**)&d_hash, 4 * BLOCKSIZE * sizeof(uint32_t));
-	for (uint32_t i = 0; i <1 ; i++) {//78125
-		 getNext<<<512,1>>>(&i,d_plain, d_hash);
-		 cudaDeviceSynchronize();
+	for (int i = 0; i < 78125; i++) {//78125
+		 cudaMalloc((void**)&iter, sizeof(uint32_t));
+		 cudaMemcpy(iter,&i, sizeof(uint32_t),cudaMemcpyHostToDevice);
+		 getNext<<<512,1>>>(iter,d_plain, d_hash);
 		 cudaMemcpy(plain, d_plain, 32 * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 for (int j = 0; j < BLOCKSIZE; j++) {
 			 char* digest = digestMD5(&hash[4*j]);
-			 printf("%5d %16s: %32s\n",i*BLOCKSIZE, &plain[32*j], digest);
+			 printf("%5d %16s: %32s\r",i*BLOCKSIZE, &plain[32*j], digest);
 		 }
+		 cudaFree(iter);
 
 	}
 
@@ -64,10 +67,9 @@ char* digestMD5(uint32_t hash[4]) {
 }
 
 
-__global__ void getNext(uint32_t* iter, uint8_t *result, uint32_t *hash) {
-	static int offset = 0;
+__global__ void getNext(int* iter, uint8_t *result, uint32_t *hash) {
 	int _offset;
-	_offset = blockIdx.x;
+	_offset = *iter*BLOCKSIZE + blockIdx.x;
 	char* extension;
 	extension = (char*)malloc(MAX_UNHASHED_LEN - saltlen);
 	memcpy(extension, "\0", MAX_UNHASHED_LEN - saltlen);
@@ -89,7 +91,6 @@ __global__ void getNext(uint32_t* iter, uint8_t *result, uint32_t *hash) {
 	unsigned char* hashin;
 	hashin = (unsigned char* )malloc(saltlen + maxi);
 
-	uint32_t* a, * b, * c, * d;
 	memcpy(&result[blockIdx.x*32], salt, saltlen);
 	memcpy(&result[blockIdx.x*32] + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
 	memcpy(hashin, &result[blockIdx.x*32], 32);
