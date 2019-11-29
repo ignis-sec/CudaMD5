@@ -39,23 +39,23 @@ int main(void) {
 		fprintf(stderr, "cudaSetDevice failed! GPU not found.");
 	}
 	int* iter;
-	plain = (uint8_t*)malloc(BLOCKSIZE * 32);
-	hash = (uint32_t*)malloc(BLOCKSIZE * 4 * sizeof(uint32_t));
+	plain = (uint8_t*)malloc(THREADSIZE * BLOCKSIZE * 32);
+	hash = (uint32_t*)malloc(THREADSIZE * BLOCKSIZE * 4 * sizeof(uint32_t));
 	solbuf = (uint8_t*)malloc(32);
 	solhash = (uint32_t*)malloc(4 * sizeof(uint32_t));
-	cudaMalloc((void**)&d_plain, 32 * BLOCKSIZE);
-	cudaMalloc((void**)&d_hash, 4 * BLOCKSIZE * sizeof(uint32_t));
+	cudaMalloc((void**)&d_plain, 32 * THREADSIZE * BLOCKSIZE);
+	cudaMalloc((void**)&d_hash, 4 * THREADSIZE * BLOCKSIZE * sizeof(uint32_t));
 	cudaMalloc((void**)&d_solbuf, 32);
 	cudaMalloc((void**)&d_solhash, 4 * sizeof(uint32_t));
-	for (int i = 0; i < 78125; i++) {//78125
+	for (uint32_t i = 0; i < 78125; i++) {//78125
 		 cudaMalloc((void**)&iter, sizeof(uint32_t));
 		 cudaMemcpy(iter,&i, sizeof(uint32_t),cudaMemcpyHostToDevice);
-		 getNext<<<512,1>>>(iter,d_plain, d_hash, d_solbuf, d_solhash);
-		 //cudaMemcpy(plain, d_plain, 32 * BLOCKSIZE, cudaMemcpyDeviceToHost);
-		 //cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t) * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 getNext<<<BLOCKSIZE,THREADSIZE>>>(iter,d_plain, d_hash, d_solbuf, d_solhash);
+		 cudaMemcpy(plain, d_plain, 32 * THREADSIZE * BLOCKSIZE, cudaMemcpyDeviceToHost);
+		 cudaMemcpy(hash, d_hash, 4 * sizeof(uint32_t)* THREADSIZE * BLOCKSIZE, cudaMemcpyDeviceToHost);
 		 cudaMemcpy(solbuf, d_solbuf, 32, cudaMemcpyDeviceToHost);
 		 //cudaMemcpy(solhash, d_solhash,32, cudaMemcpyDeviceToHost);
-		 for (int j = 0; j < BLOCKSIZE; j++) {
+		 for (int j = 0; j < THREADSIZE * BLOCKSIZE; j++) {
 			 char* digest = digestMD5(&hash[4*j]);
 			 //char* digest2 = digestMD5(solhash);
 			 if (strlen((char*)solbuf) != 0) {
@@ -64,9 +64,8 @@ int main(void) {
 				 memset(solbuf, 0, 32);
 				 cudaMemset(d_solbuf, 0, 32);
 			 }
-			 printf("%d\r", i*BLOCKSIZE*512);
 			 //if ((i % 100)==0)
-			 //printf("%5d %16s: %32s\r",i*BLOCKSIZE, &plain[32*j], digest);
+			 printf("%10d %16s: %32s\r",i* THREADSIZE * BLOCKSIZE+j, &plain[32*j], digest);
 			 free(digest);
 		 }
 		 cudaFree(iter);

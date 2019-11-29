@@ -25,8 +25,9 @@
 
 
 __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf, uint32_t* solhash) {
-	int _offset;
-	_offset = *iter * BLOCKSIZE + blockIdx.x;
+	uint32_t _offset;
+	uint32_t id = (blockIdx.x * blockDim.x + threadIdx.x); //id in current job
+	_offset = *iter * blockDim.x + id;
 	char* extension;
 	extension = (char*)malloc(MAX_UNHASHED_LEN - saltlen);
 	memcpy(extension, "\0", MAX_UNHASHED_LEN - saltlen);
@@ -48,17 +49,17 @@ __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* sol
 	unsigned char* hashin;
 	hashin = (unsigned char*)malloc(saltlen + maxi);
 
-	memcpy(&result[blockIdx.x * 32], salt, saltlen);
-	memcpy(&result[blockIdx.x * 32] + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
-	memcpy(hashin, &result[blockIdx.x * 32], 32);
-	CudaMD5(hashin, maxi + saltlen + 1, &hash[blockIdx.x * 4], &hash[blockIdx.x * 4 + 1], &hash[blockIdx.x * 4 + 2], &hash[blockIdx.x * 4 + 3]);
+	memcpy(&result[id* 32], salt, saltlen);
+	memcpy(&result[id * 32] + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
+	memcpy(hashin, &result[id * 32], 32);
+	CudaMD5(hashin, maxi + saltlen + 1, &hash[id * 4], &hash[id * 4 +1 ], &hash[id * 4 + 2], &hash[id * 4 + 3]);
 	uint8_t tb;
 	uint32_t tw;
 	int digestedCounter = 0;
 	int bMatchFlag = 1;
 	for (int i = 0; i < 4; i++) {
 		//if (!bMatchFlag)break;
-		tw = hash[blockIdx.x * 4 + i];
+		tw = hash[id * 4 + i];
 		for (int j = 0; j < 4; j++) {
 			//if (!bMatchFlag)break;
 			for (int k = 0; k < 2; k++) {
