@@ -19,4 +19,4 @@ __device__ static const int MAX_UNHASHED_LEN = 32;
 #define THREADSIZE 512
 
 __device__ void CudaMD5(unsigned char* data, int length, uint32_t* a1, uint32_t* b1, uint32_t* c1, uint32_t* d1);
-__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf, uint32_t* solhash);
+__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf);

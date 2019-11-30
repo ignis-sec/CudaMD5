@@ -1,39 +1,19 @@
-/**
- **********************************************************************
- ** Copyright (C) 1990, RSA Data Security, Inc. All rights reserved. **
- **                                                                  **
- ** License to copy and use this software is granted provided that   **
- ** it is identified as the "RSA Data Security, Inc. MD5 Message     **
- ** Digest Algorithm" in all material mentioning or referencing this **
- ** software or this function.                                       **
- **                                                                  **
- ** License is also granted to make and use derivative works         **
- ** provided that such works are identified as "derived from the RSA **
- ** Data Security, Inc. MD5 Message Digest Algorithm" in all         **
- ** material mentioning or referencing the derived work.             **
- **                                                                  **
- ** RSA Data Security, Inc. makes no representations concerning      **
- ** either the merchantability of this software or the suitability   **
- ** of this software for any particular purpose.  It is provided "as **
- ** is" without express or implied warranty of any kind.             **
- **                                                                  **
- ** These notices must be retained in any copies of any part of this **
- ** documentation and/or software.                                   **
- **********************************************************************
- */
 #include "md5.h"
 
 
-__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf, uint32_t* solhash) {
+__global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* solbuf) {
 	uint32_t _offset;
-	uint32_t id = (blockIdx.x * THREADSIZE + threadIdx.x); //id in current job
+	//get current unique id of this job
+	uint32_t id = (blockIdx.x * THREADSIZE + threadIdx.x); 
 	_offset = *iter * THREADSIZE * BLOCKSIZE + id;
+	//where part after salt is going to be stored
 	char* extension;
 	extension = (char*)malloc(MAX_UNHASHED_LEN - saltlen);
 	memcpy(extension, "\0", MAX_UNHASHED_LEN - saltlen);
+	
+	//max number of iterations below to 
 	int maxi = 0;
-
-
+	//generate string for current id
 	for (int i = 0; i < 32; i++) {
 		int rem = _offset % alphabet_length;
 		int div = _offset / alphabet_length;
@@ -49,19 +29,28 @@ __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* sol
 	unsigned char* hashin;
 	hashin = (unsigned char*)malloc(saltlen + maxi);
 
+	//append salt and extension together
 	memcpy(&result[id* 32], salt, saltlen);
 	memcpy(&result[id * 32] + saltlen, extension, MAX_UNHASHED_LEN - saltlen);
 	memcpy(hashin, &result[id * 32], 32);
+
+	//get hash result for the current string
 	CudaMD5(hashin, maxi + saltlen + 1, &hash[id * 4], &hash[id * 4 +1 ], &hash[id * 4 + 2], &hash[id * 4 + 3]);
+
+	//temp byte
 	uint8_t tb;
+	//temp word
 	uint32_t tw;
+
+
+	//pattern matching for 0e[0-9]{30}
 	int digestedCounter = 0;
 	int bMatchFlag = 1;
 	for (int i = 0; i < 4; i++) {
-		//if (!bMatchFlag)break;
+		if (!bMatchFlag)break;
 		tw = hash[id * 4 + i];
 		for (int j = 0; j < 4; j++) {
-			//if (!bMatchFlag)break;
+			if (!bMatchFlag)break;
 			for (int k = 0; k < 2; k++) {
 				tb = tw >> 8 * j;
 				if (k == 0) {
@@ -85,15 +74,37 @@ __global__ void getNext(int* iter, uint8_t* result, uint32_t* hash, uint8_t* sol
 		}
 	}
 	if (bMatchFlag) {
+		//if its a match, copy to solution buffer to be read from host
 		memcpy(solbuf, hashin, 32);
-		//memcpy(solhash, &hash[blockIdx.x * 4], 4* sizeof(uint32_t));
 	}
 	free(extension);
 	free(hashin);
 }
 
-
-
+///MD5 Black magic below
+/**
+ **********************************************************************
+ ** Copyright (C) 1990, RSA Data Security, Inc. All rights reserved. **
+ **                                                                  **
+ ** License to copy and use this software is granted provided that   **
+ ** it is identified as the "RSA Data Security, Inc. MD5 Message     **
+ ** Digest Algorithm" in all material mentioning or referencing this **
+ ** software or this function.                                       **
+ **                                                                  **
+ ** License is also granted to make and use derivative works         **
+ ** provided that such works are identified as "derived from the RSA **
+ ** Data Security, Inc. MD5 Message Digest Algorithm" in all         **
+ ** material mentioning or referencing the derived work.             **
+ **                                                                  **
+ ** RSA Data Security, Inc. makes no representations concerning      **
+ ** either the merchantability of this software or the suitability   **
+ ** of this software for any particular purpose.  It is provided "as **
+ ** is" without express or implied warranty of any kind.             **
+ **                                                                  **
+ ** These notices must be retained in any copies of any part of this **
+ ** documentation and/or software.                                   **
+ **********************************************************************
+ */
 /* F, G and H are basic MD5 functions: selection, majority, parity */
 #define F(x, y, z) (((x) & (y)) | ((~x) & (z)))
 #define G(x, y, z) (((x) & (z)) | ((y) & (~z)))
